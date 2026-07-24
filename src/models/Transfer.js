@@ -14,7 +14,11 @@ const Transfer = sequelize.define('Transfer', {
     },
     receiver_account_id: {
         type: DataTypes.UUID,
-        allowNull: false
+        allowNull: true
+    },
+    receiver_iban: {
+        type: DataTypes.STRING,
+        allowNull: false // YENİ EKLENDİ: Paranın kime gittiğini dekontta göstermek için şart
     },
     amount: {
         type: DataTypes.DECIMAL(15, 2),

@@ -1,4 +1,4 @@
-const {Customer,TokenBlacklist} = require('../models');
+const {Customer,TokenBlacklist, Account} = require('../models');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const Joi = require('joi');
@@ -227,6 +227,9 @@ const getProfile = async (req, res, next) => {
     }
 
 };
+
+
+
 
 
 module.exports = {createCustomer, loginCustomer, logoutCustomer, getProfile} ;
