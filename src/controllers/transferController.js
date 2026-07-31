@@ -5,10 +5,11 @@ const { parse } = require('dotenv');
 
 const makeTransfer = async (req, res, next) => {
 
-    //islem yarida kesilirse herseyi geri alabilmek icin sequelize transaction baslatiyoruz
-    const t = await sequelize.transaction();
+    let t;
 
     try {
+        // İşlem yarıda kesilirse her şeyi geri alabilmek için transaction başlatıyoruz.
+        t = await sequelize.transaction();
         
         const customerId = req.customer.customer_id ;
 
@@ -18,6 +19,12 @@ const makeTransfer = async (req, res, next) => {
         if (!sender_iban || !receiver_iban || amount <= 0) {
             await t.rollback();
             return res.status(400).json({ success:false, message:'Geçersiz transfer bilgileri!'});
+        }
+
+        // Uygulamanın ürettiği IBAN formatı: TR + 25 rakam = 27 karakter.
+        if (typeof receiver_iban !== 'string' || !/^TR\d{25}$/.test(receiver_iban)) {
+            await t.rollback();
+            return res.status(400).json({ success:false, message:'Geçerli bir IBAN giriniz!' });
         }
 
         //iban kontrolu
@@ -62,12 +69,27 @@ const makeTransfer = async (req, res, next) => {
         //alici banka ici mi yoksa baska bir bankadan mi tespit ediyoruz
         let receiverAccount = null;
         if(isHavale){
-            receiverAccount = await Account.findOne({ where: {iban:receiver_iban}}, {transaction:t });
+            receiverAccount = await Account.findOne({
+                where: { iban: receiver_iban },
+                transaction: t
+            });
             if (!receiverAccount){
                 await t.rollback();
                 return res.status(404).json({ success:false, message:'Alıcı postbank hesabı bulunamadı!'});
             }
+
+            //  hesap turu ve doviz kontrolu
+            if (senderAccount.currency !== receiverAccount.currency) {
+                await t.rollback();
+                return res.status(400).json({
+                    success: false,
+                    message: "Farklı para birimlerine sahip hesaplar arasında transfer yapılamaz!"
+                });
+            }
+
         }
+
+
 
         //gonderici hesabin bakiyeyi guncelliyoruz
         const newSenderBalance = parseFloat(senderAccount.balance) - totalDeduction;
@@ -152,8 +174,12 @@ const makeTransfer = async (req, res, next) => {
         
 
     } catch (error) {
-        await t.rollback();
-        next(error);
+        // Doğrulama hatasında transaction daha önce kapatılmış olabilir.
+        if (t && !t.finished) {
+            await t.rollback();
+        }
+
+        return next(error);
     }
 
 };

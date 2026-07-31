@@ -99,8 +99,16 @@ const createCustomer = async (req, res, next) => {
 
         
     } catch (error) {
-        next(error);
-        res.status(500).json({ success: false, message: 'Sunucu hatası oluştu, lütfen daha sonra tekrar deneyiniz.' });
+        // Eş zamanlı iki istek ön kontrolden geçse bile veritabanındaki
+        // unique kısıtı aynı e-posta ile ikinci kaydı engeller.
+        if (error.name === 'SequelizeUniqueConstraintError') {
+            return res.status(409).json({
+                success: false,
+                message: 'Bu email zaten kullanılıyor!'
+            });
+        }
+
+        return next(error);
         
     }
 
@@ -158,8 +166,7 @@ const loginCustomer = async (req, res, next) => {
         
     } catch (error) {
         
-        next(error);
-        res.status(500).json({ success: false, message: 'Sunucu hatası oluştu, lütfen daha sonra tekrar deneyiniz.' });
+        return next(error);
         
     }
 
@@ -197,8 +204,7 @@ const logoutCustomer = async (req, res, next) => {
 
         
     } catch (error) {
-        next(error);
-        res.status(500).json({ success: false, message: 'Sunucu hatası oluştu, lütfen daha sonra tekrar deneyiniz.' });
+        return next(error);
         
     }
 };
@@ -223,7 +229,7 @@ const getProfile = async (req, res, next) => {
         res.status(200).json({ success:true, data: customer});
         
     } catch (error) {
-        next(error);
+        return next(error);
     }
 
 };

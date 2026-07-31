@@ -1,4 +1,4 @@
-const { Account, Transaction } = require('../models');
+const { sequelize, Account, Transaction } = require('../models');
 
 // 1. Yardımcı Fonksiyon: 8 Haneli Rastgele Hesap Numarası Üretici
 const generateAccountNumber = () => {
@@ -47,7 +47,7 @@ const createAccount = async (req, res, next) => {
         })
         
     } catch (error) {
-        next(error);//olasi hatayi global error handler'a yolluyoruz
+        return next(error);//olasi hatayi global error handler'a yolluyoruz
     }
 };
 
@@ -95,24 +95,34 @@ const deposit = async (req, res, next) => {
         });
         
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
 
 const withdraw = async (req, res, next) => {
-    // Yine veri güvenliği için transaction başlatıyoruz
-    const t = await sequelize.transaction();
+
+    
+    let t;
+    
 
     try {
+
+        console.log("Withdraw çalıştı");
+
+        // Yine veri güvenliği için transaction başlatıyoruz
+        t = await sequelize.transaction();
+        console.log(sequelize);
+        console.log("transaction olustu");
         const customerId = req.customer.customer_id;
         const { account_number, amount, description } = req.body;
 
+        console.log("2");
         if (!account_number || amount <= 0) {
             await t.rollback();
             return res.status(400).json({ success: false, message: 'Geçersiz işlem bilgileri.' });
         }
-
+        console.log("3");
         const account = await Account.findOne({
             where: { account_number: account_number, customer_id: customerId },
             transaction: t
@@ -123,17 +133,19 @@ const withdraw = async (req, res, next) => {
             return res.status(404).json({ success: false, message: 'Hesap bulunamadı veya size ait değil.' });
         }
 
+        console.log("4");
+
         // Bakiye yetersizse işlemi iptal et
         if (parseFloat(account.balance) < parseFloat(amount)) {
             await t.rollback();
             return res.status(400).json({ success: false, message: 'Bakiyeniz bu işlem için yetersiz.' });
         }
-
+        console.log("5");
         // Bakiyeyi düş
         const newBalance = parseFloat(account.balance) - parseFloat(amount);
         account.balance = newBalance;
         await account.save({ transaction: t });
-
+        console.log("6");
         // Dekont oluştur (CASH - Nakit Çıkışı)
         await Transaction.create({
             account_id: account.account_id,
@@ -144,6 +156,8 @@ const withdraw = async (req, res, next) => {
             source_type: 'CASH', // Dış transfer değil, nakit
             source_id: null
         }, { transaction: t });
+
+        console.log("7");
 
         await t.commit();
 
@@ -157,8 +171,13 @@ const withdraw = async (req, res, next) => {
         });
 
     } catch (error) {
-        await t.rollback();
-        next(error);
+
+        // Daha önce rollback edilmiş bir transaction'ı tekrar rollback etme.
+        if (t && !t.finished) {
+            await t.rollback();
+        }
+        
+        return next(error);
     }
 };
 
@@ -188,7 +207,7 @@ const getTransactions = async (req, res, next) => {
             data: transactions
         });
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
@@ -211,7 +230,7 @@ const getMyAccounts = async (req, res, next) => {
         });
 
     } catch (error) {
-        next(error);
+        return next(error);
     }
 };
 
